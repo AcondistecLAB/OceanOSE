@@ -1,0 +1,74 @@
+osis:
+  huawei:
+    name: oceanstor
+    region: default
+    storage-classes: default
+    version: 8.1.5
+    rgw:
+      endpoint: https://192.168.128.10:9443/
+      access-key: AEEB09FC953686FB4A0F
+      secret-key: zhTr1NzIvk1uQV13FjC9J4edOyMAAAGAlTaG/pAt
+    s3:
+      endpoint: https://10.100.1.21/
+      access-key: B6630CEF559E1489F902
+      secret-key: CqUPgvAg8L1XPbuChRLGPPXqXlcAAAGGVZ4Uk1vC
+    console:
+      endpoint: https://192.168.128.10:8088/
+  api:
+    version: 1.0.0
+
+server:
+  port: 8443
+  verbose: true
+  ssl:
+    key-store: classpath:osis.p12
+    key-store-password: vmware
+    key-store-type: PKCS12
+    key-alias: osis.dev.eng.vmware.com
+
+security:
+  require-ssl: true
+  jwt:
+    enabled: true
+    access-token-expiration-time: 15
+    refresh_token_expiration_time: 262800
+    token-issuer: http://10.143.135.35
+    token-signing-key: thisisosis
+
+#h2配置
+spring:
+  jpa:
+    #启用SQL语句的日志记录
+    show-sql: true
+    #设置ddl模式
+    hibernate:
+      ddl-auto: update
+  ##数据库连接设置
+  datasource:
+    driverClassName: org.h2.Driver
+    #可执行程序的当前路径
+    #url: jdbc:h2:mem:test
+    url: jdbc:h2:file:./db/h2/osis
+    #指定的静态配置路径
+    username: h2
+    password: Huawei@123
+    ##数据初始化设置
+    #进行该配置后，每次启动程序，程序都会运行resources/db/schema.sql文件，对数据库的结构进行操作。
+    #schema: classpath:db/schema.sql
+    #进行该配置后，每次启动程序，程序都会运行resources/db/data.sql文件，对数据库的数据操作。
+    #data: classpath:db/data.sql
+    ##h2 web console设置
+    #表明使用的数据库平台是h2
+    platform: h2
+  # 进行该配置后，h2 web consloe就可以在远程访问了。否则只能在本机访问。
+  h2:
+    console:
+      settings:
+        web-allow-others: true
+      #进行该配置，你就可以通过YOUR_URL/h2访问h2 web consloe。YOUR_URL是你程序的访问URl。
+      path: /h2
+      #进行该配置，程序开启时就会启动h2 web consloe。当然这是默认的，如果你不想在启动程序时启动h2 web consloe，那么就设置为false。
+      enabled: true
+
+  #logging:
+  #config: G:/vmwareclouddirector/src/main/resources/logback-osis.xml

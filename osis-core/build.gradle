@@ -1,0 +1,6 @@
+dependencies {
+    implementation project(':huawei-client')
+}
+test {
+    useJUnitPlatform()
+}
