@@ -2,16 +2,17 @@ osis:
   huawei:
     name: oceanstor
     region: default
+    signatureVersion: v4 #s3服务签名版本，支持v2、v4.默认为v4
     storage-classes: default
     version: 8.1.5
     rgw:
       endpoint: https://192.168.128.10:9443/
-      access-key: AEEB09FC953686FB4A0F
-      secret-key: zhTr1NzIvk1uQV13FjC9J4edOyMAAAGAlTaG/pAt
+      access-key: ak
+      secret-key: sk
     s3:
       endpoint: https://10.100.1.21/
-      access-key: B6630CEF559E1489F902
-      secret-key: CqUPgvAg8L1XPbuChRLGPPXqXlcAAAGGVZ4Uk1vC
+      access-key: ak
+      secret-key: sk
     console:
       endpoint: https://192.168.128.10:8088/
   api:

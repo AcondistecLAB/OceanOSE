@@ -63,6 +63,12 @@ public class HwAdminImpl implements HwAdmin {
     @Value("${osis.huawei.s3.endpoint}")
     private String endpointS3;
 
+    @Value("${osis.huawei.region:default}")
+    private String region;
+
+    @Value("${osis.huawei.signatureVersion:v4}")
+    private String signatureVersion;
+
     @Autowired
     private Gson gson;
 
@@ -426,7 +432,6 @@ public class HwAdminImpl implements HwAdmin {
         UserAccessKey reUserAccessKey = null;
         if (!page.isEmpty()) {
             UserAccessKey userAccessKey = page.getContent().get(0);
-            String id = userAccessKey.getId();
             String userName = userAccessKey.getUserName();
             String userAk = userAccessKey.getAccessKeyId();
 
@@ -485,8 +490,15 @@ public class HwAdminImpl implements HwAdmin {
         // 获取帐户的ak、sk
         AccountAccessKey accountAccessKey = this.getAccountAccessKeyByAccountId(tenantId);
         if (accountAccessKey != null) {
-            Result<String> result = HwObsServiceUtil.listAllMyBuckets(endpointS3, accountAccessKey.getAccessKeyId(),
-                accountAccessKey.getSecretAccessKey());
+            Result<String> result;
+            if ("v4".equals(signatureVersion)) {
+                result = HwObsServiceUtil.listAllMyBucketsV4(endpointS3, accountAccessKey.getAccessKeyId(),
+                    accountAccessKey.getSecretAccessKey(), region);
+            } else {
+                result = HwObsServiceUtil.listAllMyBuckets(endpointS3, accountAccessKey.getAccessKeyId(),
+                    accountAccessKey.getSecretAccessKey());
+            }
+
             if (result.is2xxSuccess()) {
                 JsonObject bucketsResult = gson.fromJson(result.getData(), JsonObject.class)
                     .getAsJsonObject("ListAllMyBucketsResult");
@@ -524,16 +536,22 @@ public class HwAdminImpl implements HwAdmin {
             //获取桶的使用量
             AccountAccessKey accountAccessKey = this.getAccountAccessKeyByAccountId(tenantId);
             if (accountAccessKey != null) {
-                Result<String> result = HwObsServiceUtil.getBucketStorageInfo(endpointS3,
-                    accountAccessKey.getAccessKeyId(), accountAccessKey.getSecretAccessKey(),
-                    bucketObj.get("Name").getAsString());
+                Result<String> result;
+                if ("v4".equals(signatureVersion)) {
+                    result = HwObsServiceUtil.getBucketStorageInfoV4(endpointS3, accountAccessKey.getAccessKeyId(),
+                        accountAccessKey.getSecretAccessKey(), bucketObj.get("Name").getAsString(), region);
+                } else {
+                    result = HwObsServiceUtil.getBucketStorageInfo(endpointS3, accountAccessKey.getAccessKeyId(),
+                        accountAccessKey.getSecretAccessKey(), bucketObj.get("Name").getAsString());
+                }
+
                 if (result.is2xxSuccess()) {
                     JsonObject bucketsResult = gson.fromJson(result.getData(), JsonObject.class)
                         .getAsJsonObject("GetBucketStorageInfoResult");
                     Long size = bucketsResult.get("Size").getAsLong();
-                    Long objectnumber = bucketsResult.get("ObjectNumber").getAsLong();
+                    Long objectNumber = bucketsResult.get("ObjectNumber").getAsLong();
                     bucketBean.setSize(size);
-                    bucketBean.setObjectNumber(objectnumber);
+                    bucketBean.setObjectNumber(objectNumber);
                 }
             }
         }

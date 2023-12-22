@@ -23,6 +23,7 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * @author Administrator
@@ -32,15 +33,108 @@ import java.util.Map;
 public class HwObsServiceUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger(HwObsServiceUtil.class);
 
-    public static void main(String[] str) throws NoSuchAlgorithmException, KeyManagementException {
-        String endpoint = "https://10.100.1.21";
+    public static void main(String[] str) {
+        String endpoint = "https://10.100.1.21/";
         //String endpoint = "10.100.1.21";
         String bucketname = "testWang1102";
         String accessKey = "BA430CF08DCB201BB2B7"; //取值为获取的AK
         String securityKey = "0pl7WZAxXoZC/WZI5DW4xhQ6f1cAAAGLjcsgG0IZ";  //取值为获取的SK
-        //LOGGER.info(listAllMyBuckets(endpoint, accessKey, securityKey).getData());
-        //getBucketStorageInfo(endpoint,accessKey,securityKey,bucketname);
-        createBucket(endpoint, accessKey, securityKey, bucketname);
+        //listAllMyBuckets(endpoint, accessKey, securityKey).getData();
+        getBucketStorageInfo(endpoint, accessKey, securityKey, bucketname);
+        //createBucket(endpoint, accessKey, securityKey, bucketname);
+        //listAllMyBucketsV4(endpoint, accessKey, securityKey, "default");
+        getBucketStorageInfoV4(endpoint, accessKey, securityKey, bucketname, "default");
+    }
+
+    public static Map<String, String> getV4Headers(String host, String uri, String methodName, String region,
+        String service, TreeMap<String, String> queryParams, String body, String accessKey, String secretKey) {
+        TreeMap<String, String> awsHeaders = new TreeMap<>();
+        awsHeaders.put("host", host);
+        AWSV4Auth.Builder builder = new AWSV4Auth.Builder(accessKey, secretKey);
+        return builder.regionName(region)
+            .serviceName(service)
+            .httpMethodName(methodName)
+            .canonicalURI(uri)
+            .queryParams(queryParams)
+            .awsHeaders(awsHeaders)
+            .payload(body)
+            .build()
+            .getHeaders();
+    }
+
+    private static String buildV4Url(String endpoint, String uri, TreeMap<String, String> queryParams) {
+        StringBuffer stringBuffer = new StringBuffer(endpoint);
+        stringBuffer.append(uri);
+        if (queryParams != null && !queryParams.isEmpty()) {
+            stringBuffer.append("?");
+            queryParams.forEach((k, v) -> {
+                stringBuffer.append(k).append("=").append(AWSV4Auth.encodeParameter(v)).append("&");
+            });
+
+            stringBuffer.deleteCharAt(stringBuffer.lastIndexOf("&"));
+        }
+        return stringBuffer.toString();
+    }
+
+    public static Result<String> v4Execute(String endpoint, String service, String uri, String methodName,
+        TreeMap<String, String> queryParams, String body, String region, String accessKey, String securityKey) {
+        int statusCode = 500;
+        String errMsg = "";
+        String dataStr = "";
+        BufferedReader reader = null;
+        try {
+            HttpClient httpClient = HwClientUtil.getHttpClient();
+            if (endpoint.endsWith("/")) {
+                endpoint = endpoint.substring(0, endpoint.length() - 1);
+            }
+            String url = buildV4Url(endpoint, uri, queryParams);
+            HttpUriRequest httpGet = new HttpGet(url);
+            LOGGER.info("v4Execute, method={}, url={}", methodName, url);
+            String[] hostArr = endpoint.split("//");
+            String host = hostArr[hostArr.length - 1];
+            Map<String, String> v4headers = getV4Headers(host, uri, methodName, region, service, queryParams, body,
+                accessKey, securityKey);
+            for (Map.Entry<String, String> entry : v4headers.entrySet()) {
+                httpGet.addHeader(entry.getKey(), entry.getValue());
+            }
+            LOGGER.info("Request Message:" + httpGet.getRequestLine());
+            HttpResponse httpResponse = httpClient.execute(httpGet);
+            LOGGER.info("Response Message:" + httpResponse.getStatusLine());
+            statusCode = httpResponse.getStatusLine().getStatusCode();
+
+            reader = new BufferedReader(new InputStreamReader(httpResponse.getEntity().getContent()));
+            StringBuffer response = new StringBuffer();
+            String inputLine;
+            while ((inputLine = reader.readLine()) != null) {
+                response.append(inputLine);
+            }
+            dataStr = XML.toJSONObject(response.toString()).toString();
+            if (statusCode / 100 != 2) {
+                JSONObject errObj = JSONUtil.parseObj(dataStr).getJSONObject("Error");
+                errMsg = errObj.getStr("Message");
+            }
+        } catch (NoSuchAlgorithmException ex) {
+            errMsg = ex.getMessage();
+        } catch (KeyManagementException | IOException ex) {
+            errMsg = ex.getMessage();
+        } finally {
+            try {
+                if (reader != null) {
+                    reader.close();
+                }
+            } catch (IOException ex) {
+                errMsg = ex.getMessage();
+            }
+        }
+        LOGGER.info("v4Execute end!statusCode={},dataStr={}", statusCode, dataStr);
+        return ResultBuilder.custom().data(dataStr).code(statusCode).msg(errMsg).build();
+    }
+
+    public static Result<String> listAllMyBucketsV4(String endpoint, String accessKey, String securityKey,
+        String region) {
+        LOGGER.info("listAllMyBucketsV4 begin!endpoint={}", endpoint);
+        return v4Execute(endpoint, "s3", "/", "GET", null, "", region, accessKey, securityKey);
+
     }
 
     public static Result<String> listAllMyBuckets(String endpoint, String accessKey, String securityKey) {
@@ -104,6 +198,13 @@ public class HwObsServiceUtil {
         return ResultBuilder.custom().data(dataStr).code(statusCode).msg(errMsg).build();
     }
 
+    public static Result<String> getBucketStorageInfoV4(String endpoint, String accessKey, String securityKey,
+        String bucketName, String region) {
+        TreeMap<String, String> querys = new TreeMap<>();
+        querys.put("storageinfo", "");
+        return v4Execute(endpoint, "s3", "/" + bucketName, "GET", querys, "", region, accessKey, securityKey);
+    }
+
     public static Result<String> getBucketStorageInfo(String endpoint, String accessKey, String securityKey,
         String bucketName) {
         LOGGER.info("getBucketStorageInfo begin!endpoint={}", endpoint);
@@ -146,13 +247,13 @@ public class HwObsServiceUtil {
             reader.close();
 
             String jsonStr = XML.toJSONObject(response.toString()).toString();
+            LOGGER.info("v2 getBucketStorageInfo end!statusCode={},jsonStr={}", statusCode, jsonStr);
             if (statusCode / 100 != 2) {
                 JSONObject errObj = JSONUtil.parseObj(jsonStr).getJSONObject("Error");
                 errMsg = errObj.getStr("Message");
             } else {
                 return ResultBuilder.success(jsonStr, statusCode).build();
             }
-            LOGGER.info(response.toString());
         } catch (NoSuchAlgorithmException ex) {
             errMsg = ex.getMessage();
         } catch (KeyManagementException ex) {
